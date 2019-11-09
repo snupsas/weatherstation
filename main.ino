@@ -51,6 +51,22 @@ DHT dht(DHTPIN, DHTTYPE);
 uint8_t tftHeight = 0;
 uint8_t tftWidth = 0;
 
+// image 
+extern unsigned char cake[];
+uint16_t imgColors[] = 
+{
+    ST77XX_BLUE,
+    ST77XX_RED,
+    ST77XX_GREEN,
+    ST77XX_CYAN,
+    ST77XX_MAGENTA,
+    ST77XX_YELLOW,
+    ST77XX_WHITE,
+};
+volatile uint8_t colorSize = sizeof(imgColors);
+boolean outlineFlag = false;
+
+// setup
 void setup(void) {
   counter = 0;
   
@@ -77,6 +93,27 @@ void setup(void) {
 void loop() {
   
   GetTime(&dataStr);
+
+  if(CheckEvent(&dataStr))
+  {
+    if(outlineFlag == true)
+    {
+      tft.fillScreen(ST77XX_BLACK);
+      delay(50);
+      outlineFlag = false;
+    }
+    
+    tftDraw(cake);
+    return;
+  }
+
+  if(outlineFlag == false)
+  {
+    tft.fillScreen(ST77XX_BLACK);
+    delay(50);
+    tftDrawOutline();
+  }
+  
   tftPrintTime(&dataStr, txtBuffer);
 
   if(counter >= REFRESH_COUNTER)
@@ -116,9 +153,10 @@ void tftDrawOutline(){
   tft.drawLine(1, tftHeight/3 , tftWidth-1, tftHeight/3, ST77XX_WHITE);
   tft.drawLine(1, tftHeight/(float)1.5 , tftWidth-1, tftHeight/(float)1.5, ST77XX_WHITE);
   tft.drawLine(tftWidth/2, tftHeight/(float)1.5, tftWidth/2, tftHeight/3, ST77XX_WHITE);
+  outlineFlag = true;
 }
 
-void tftPrintPressure(DataStr* dStr, char *buffer, char *floatBuffer){
+void tftPrintPressure(DataStr *dStr, char *buffer, char *floatBuffer){
   tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft.setTextSize(2);
   tft.setCursor(25, 100);
@@ -129,7 +167,7 @@ void tftPrintPressure(DataStr* dStr, char *buffer, char *floatBuffer){
   tft.println(buffer);
 }
 
-void tftPrintTemp(DataStr* dStr, char *buffer){
+void tftPrintTemp(DataStr *dStr, char *buffer){
   tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft.setTextSize(3);
   tft.setCursor(15, 55);
@@ -138,7 +176,7 @@ void tftPrintTemp(DataStr* dStr, char *buffer){
   tft.println(buffer);
 }
 
-void tftPrintHum(DataStr* dStr, char *buffer){
+void tftPrintHum(DataStr *dStr, char *buffer){
   tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft.setTextSize(3);
   tft.setCursor(95, 55);
@@ -147,7 +185,7 @@ void tftPrintHum(DataStr* dStr, char *buffer){
   tft.println(buffer);
 }
 
-void tftPrintTime(DataStr* dStr, char *buffer){
+void tftPrintTime(DataStr *dStr, char *buffer){
   tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft.setTextSize(2);
   tft.setCursor(30, 10);
@@ -156,7 +194,7 @@ void tftPrintTime(DataStr* dStr, char *buffer){
   tft.println(buffer);
 }
 
-void tftPrintDate(DataStr* dStr, char *buffer){
+void tftPrintDate(DataStr *dStr, char *buffer){
   tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft.setTextSize(1);
   tft.setCursor(50, 30);
@@ -166,26 +204,26 @@ void tftPrintDate(DataStr* dStr, char *buffer){
 }
 
 
-void GetTime(DataStr* dStr){
+void GetTime(DataStr *dStr){
   DateTime now = RTC.now();
   dStr->hours = now.hour();
   dStr->minutes = now.minute();
   dStr->seconds = now.second();
 }
 
-void GetDate(DataStr* dStr){
+void GetDate(DataStr *dStr){
   DateTime now = RTC.now();
   dStr->year = now.year();
   dStr->month = now.month();
   dStr->day = now.day();
 }
 
-void GetTempAndHum(DataStr* dStr){
+void GetTempAndHum(DataStr *dStr){
   dStr->temp = dht.readTemperature();
   dStr->hum = dht.readHumidity();
 }
 
-void GetPressure(DataStr* dStr){
+void GetPressure(DataStr *dStr){
   dStr->pres = bmp.readPressure();
 }
 
@@ -194,3 +232,44 @@ void ClearBuffer(char *ptrPrintBuffer)
   memset(ptrPrintBuffer, 0, sizeof(ptrPrintBuffer)); 
 }
 
+// events/images
+boolean CheckEvent(DataStr *dStr)
+{
+  uint8_t eventMonth = 11;
+  uint8_t eventDay = 15;
+  uint8_t minutePeriod = 5;
+
+  return dStr->month == eventMonth && dStr->day == eventDay && dStr->minutes % minutePeriod == 0 && (dStr->hours > 10 && dStr->hours != 0);
+}
+
+void tftDraw(uint8_t *img)
+{  
+  for(uint8_t i = 0; i < 7; i++)
+  {
+    drawBitmap(30,14,img,100,100,imgColors[i]);
+    delay(10); 
+  }
+}
+
+void drawBitmap(int16_t x, int16_t y,const uint8_t *bitmap, int16_t w, int16_t h, uint16_t color) 
+{
+  int16_t i, j, byteWidth = (w + 7) / 8;
+  uint8_t byte;
+
+  for(j=0; j<h; j++) {
+    for(i=0; i<w; i++) {
+      if(i & 7)
+      { 
+        byte <<= 1;
+      }
+      else
+      {
+        byte   = pgm_read_byte(bitmap + j * byteWidth + i / 8);
+      }
+      if(byte & 0x80)
+      {
+        tft.drawPixel(x+i, y+j, color);
+      }
+    }
+  }
+}
